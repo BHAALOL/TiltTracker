@@ -1,0 +1,10 @@
+python-dotenv
+psycopg2-binary
+discord.py
+riotwatcher
+SQLAlchemy
+alembic
+pytest
+logging-colorizer
+pydantic
+aiohttp

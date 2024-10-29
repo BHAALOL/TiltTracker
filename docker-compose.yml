@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: tilttracker-db
+    environment:
+      POSTGRES_USER: tilttracker
+      POSTGRES_PASSWORD: tilttracker
+      POSTGRES_DB: tilttracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
