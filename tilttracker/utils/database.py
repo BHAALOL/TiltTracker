@@ -163,6 +163,154 @@ class Database:
             logger.error(f"Erreur lors de la récupération du joueur: {e}")
             return None
 
+    async def get_player_stats(self, summoner_name: str, tag_line: str) -> dict:
+        """Récupère les statistiques complètes d'un joueur"""
+        try:
+            with self.connection.cursor() as cursor:
+                # Statistiques générales
+                cursor.execute("""
+                    SELECT 
+                        COUNT(*) as total_games,
+                        SUM(CASE WHEN win THEN 1 ELSE 0 END) as wins,
+                        AVG(kills) as avg_kills,
+                        AVG(deaths) as avg_deaths,
+                        AVG(assists) as avg_assists,
+                        AVG(score) as avg_score,
+                        MAX(score) as best_score,
+                        SUM(score) as total_score
+                    FROM player_matches pm
+                    JOIN players p ON p.id = pm.player_id
+                    WHERE p.summoner_name = %s AND p.tag_line = %s
+                """, (summoner_name, tag_line))
+                
+                stats = dict(zip([column[0] for column in cursor.description], cursor.fetchone()))
+                
+                # Champions les plus joués
+                cursor.execute("""
+                    SELECT 
+                        champion_name,
+                        COUNT(*) as games,
+                        SUM(CASE WHEN win THEN 1 ELSE 0 END)::float / COUNT(*) * 100 as winrate
+                    FROM player_matches pm
+                    JOIN players p ON p.id = pm.player_id
+                    WHERE p.summoner_name = %s AND p.tag_line = %s
+                    GROUP BY champion_name
+                    ORDER BY games DESC, winrate DESC
+                    LIMIT 3
+                """, (summoner_name, tag_line))
+                
+                stats['top_champions'] = [
+                    dict(zip([column[0] for column in cursor.description], row))
+                    for row in cursor.fetchall()
+                ]
+                
+                # Calculer les stats dérivées
+                stats['losses'] = stats['total_games'] - stats['wins']
+                stats['winrate'] = (stats['wins'] / stats['total_games'] * 100) if stats['total_games'] > 0 else 0
+                stats['kda_ratio'] = ((stats['avg_kills'] + stats['avg_assists']) / stats['avg_deaths']) if stats['avg_deaths'] > 0 else float('inf')
+                
+                # Récupérer le classement
+                cursor.execute("""
+                    WITH rankings AS (
+                        SELECT 
+                            p.summoner_name,
+                            p.tag_line,
+                            SUM(score) as total_score,
+                            RANK() OVER (ORDER BY SUM(score) DESC) as rank
+                        FROM player_matches pm
+                        JOIN players p ON p.id = pm.player_id
+                        GROUP BY p.id, p.summoner_name, p.tag_line
+                    )
+                    SELECT rank
+                    FROM rankings
+                    WHERE summoner_name = %s AND tag_line = %s
+                """, (summoner_name, tag_line))
+                
+                stats['rank'] = cursor.fetchone()[0]
+                
+                return stats
+                
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération des stats: {e}")
+            return None
+
+    async def get_leaderboard(self, limit: int = 10) -> list:
+        """Récupère le classement des meilleurs joueurs"""
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        p.summoner_name,
+                        p.tag_line,
+                        COUNT(*) as total_games,
+                        SUM(CASE WHEN win THEN 1 ELSE 0 END) as wins,
+                        SUM(score) as total_score,
+                        AVG(score) as avg_score
+                    FROM player_matches pm
+                    JOIN players p ON p.id = pm.player_id
+                    GROUP BY p.id, p.summoner_name, p.tag_line
+                    ORDER BY total_score DESC
+                    LIMIT %s
+                """, (limit,))
+                
+                players = [dict(zip([column[0] for column in cursor.description], row))
+                          for row in cursor.fetchall()]
+                
+                # Calculer le winrate pour chaque joueur
+                for player in players:
+                    player['winrate'] = (player['wins'] / player['total_games'] * 100)
+                    
+                return players
+                
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération du classement: {e}")
+            return None
+
+    async def get_last_game(self, summoner_name: str, tag_line: str) -> dict:
+        """Récupère la dernière partie d'un joueur"""
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        pm.*,
+                        m.match_id,
+                        m.game_duration
+                    FROM player_matches pm
+                    JOIN players p ON p.id = pm.player_id
+                    JOIN matches m ON m.id = pm.match_id
+                    WHERE p.summoner_name = %s AND p.tag_line = %s
+                    ORDER BY m.created_at DESC
+                    LIMIT 1
+                """, (summoner_name, tag_line))
+                
+                game = dict(zip([column[0] for column in cursor.description], cursor.fetchone()))
+                
+                return {
+                    'player_stats': {
+                        'summoner_name': summoner_name,
+                        'tag_line': tag_line,
+                        'champion_name': game['champion_name'],
+                        'kills': game['kills'],
+                        'deaths': game['deaths'],
+                        'assists': game['assists'],
+                        'total_damage_dealt_to_champions': game['total_damage_dealt_to_champions'],
+                        'total_damage_taken': game['total_damage_taken'],
+                        'win': game['win']
+                    },
+                    'match_stats': {
+                        'match_id': game['match_id'],
+                        'game_duration': game['game_duration']
+                    },
+                    'score_info': {
+                        'final_score': game['score'],
+                        'base_score': game['score']
+                    }
+                }
+                
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération de la dernière partie: {e}")
+            return None
+
     def close(self):
         """Ferme la connexion à la base de données."""
         if self.connection:

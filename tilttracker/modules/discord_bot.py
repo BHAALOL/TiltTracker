@@ -101,12 +101,7 @@ class CommandsCog(commands.Cog):
         game_name="Ton nom de jeu LoL",
         tag_line="Ton tag (ex: EUW, NA1, etc.)"
     )
-    async def register(
-        self, 
-        ctx: commands.Context, 
-        game_name: str,
-        tag_line: str
-    ):
+    async def register(self, ctx: commands.Context, game_name: str,tag_line: str):
         start_time = datetime.now()
         logger.info(f"Commande register reçue | "
                    f"Auteur: {ctx.author} | "
@@ -204,3 +199,174 @@ class CommandsCog(commands.Cog):
                 color=discord.Color.red()
             )
             await ctx.send(embed=error_embed)
+
+    @commands.hybrid_command(
+        name="stats",
+        description="Affiche les statistiques ARAM d'un joueur"
+    )
+    @app_commands.describe(
+        summoner_name="Nom d'invocateur (optionnel)"
+    )
+    async def stats(self, ctx: commands.Context, summoner_name: str = None):
+        """Affiche les statistiques globales d'un joueur"""
+        try:
+            await ctx.defer()
+            start_time = datetime.now()
+            
+            # Si aucun nom n'est fourni, utiliser l'ID Discord de l'auteur
+            if not summoner_name:
+                player = await self.bot.database.get_player_by_discord_id(str(ctx.author.id))
+                if not player:
+                    await ctx.send("❌ Vous n'êtes pas enregistré. Utilisez `/register` d'abord.")
+                    return
+                summoner_name = player['summoner_name']
+                tag_line = player['tag_line']
+                
+            # Récupérer les stats depuis la base de données
+            stats = await self.get_player_stats(summoner_name, tag_line)
+            
+            if not stats:
+                await ctx.send("❌ Aucune statistique trouvée pour ce joueur.")
+                return
+                
+            # Créer l'embed
+            embed = discord.Embed(
+                title=f"Statistiques ARAM de {summoner_name}#{tag_line}",
+                color=discord.Color.blue()
+            )
+            
+            # Stats générales
+            embed.add_field(
+                name="📊 Général",
+                value=f"Parties jouées: {stats['total_games']}\n"
+                      f"Victoires: {stats['wins']}\n"
+                      f"Défaites: {stats['losses']}\n"
+                      f"Winrate: {stats['winrate']:.1f}%",
+                inline=True
+            )
+            
+            # KDA moyen
+            embed.add_field(
+                name="⚔️ KDA Moyen",
+                value=f"Kills: {stats['avg_kills']:.1f}\n"
+                      f"Deaths: {stats['avg_deaths']:.1f}\n"
+                      f"Assists: {stats['avg_assists']:.1f}\n"
+                      f"Ratio: {stats['kda_ratio']:.2f}",
+                inline=True
+            )
+            
+            # Champions les plus joués
+            if stats['top_champions']:
+                champs_str = "\n".join([
+                    f"{i+1}. {champ['champion_name']} ({champ['games']} parties, {champ['winrate']:.1f}% WR)"
+                    for i, champ in enumerate(stats['top_champions'][:3])
+                ])
+                embed.add_field(
+                    name="🏆 Champions favoris",
+                    value=champs_str,
+                    inline=False
+                )
+            
+            # Performance
+            embed.add_field(
+                name="🎯 Performance",
+                value=f"Score total: {stats['total_score']}\n"
+                      f"Score moyen: {stats['avg_score']:.1f}\n"
+                      f"Meilleur score: {stats['best_score']}\n"
+                      f"Classement: #{stats['rank']}",
+                inline=False
+            )
+            
+            # Footer
+            process_time = (datetime.now() - start_time).total_seconds()
+            embed.set_footer(text=f"Généré en {process_time:.2f} secondes")
+            
+            await ctx.send(embed=embed)
+            logger.info(f"Stats affichées pour {summoner_name}#{tag_line}")
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de l'affichage des stats: {e}")
+            await ctx.send("❌ Une erreur s'est produite lors de la récupération des statistiques.")
+
+    @commands.hybrid_command(
+        name="leaderboard",
+        description="Affiche le classement ARAM"
+    )
+    async def leaderboard(self, ctx: commands.Context):
+        """Affiche le classement des joueurs"""
+        try:
+            await ctx.defer()
+            start_time = datetime.now()
+            
+            # Récupérer le top 10
+            top_players = await self.get_leaderboard()
+            
+            if not top_players:
+                await ctx.send("❌ Aucun classement disponible pour le moment.")
+                return
+                
+            embed = discord.Embed(
+                title="🏆 Classement ARAM",
+                description="Top 10 des joueurs",
+                color=discord.Color.gold()
+            )
+            
+            for i, player in enumerate(top_players, 1):
+                # Emoji pour les trois premiers
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+                
+                embed.add_field(
+                    name=f"{medal} {player['summoner_name']}#{player['tag_line']}",
+                    value=f"Score: {player['total_score']:,}\n"
+                          f"WR: {player['winrate']:.1f}% ({player['wins']}/{player['total_games']})\n"
+                          f"Score moyen: {player['avg_score']:.1f}",
+                    inline=False
+                )
+            
+            # Footer
+            process_time = (datetime.now() - start_time).total_seconds()
+            embed.set_footer(text=f"Généré en {process_time:.2f} secondes")
+            
+            await ctx.send(embed=embed)
+            logger.info("Leaderboard affiché avec succès")
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de l'affichage du leaderboard: {e}")
+            await ctx.send("❌ Une erreur s'est produite lors de la récupération du classement.")
+
+    @commands.hybrid_command(
+        name="lastgame",
+        description="Affiche les détails de la dernière partie ARAM"
+    )
+    @app_commands.describe(
+        summoner_name="Nom d'invocateur (optionnel)"
+    )
+    async def lastgame(self, ctx: commands.Context, summoner_name: str = None):
+        """Affiche les détails de la dernière partie d'un joueur"""
+        try:
+            await ctx.defer()
+            
+            # Si aucun nom n'est fourni, utiliser l'ID Discord de l'auteur
+            if not summoner_name:
+                player = await self.bot.database.get_player_by_discord_id(str(ctx.author.id))
+                if not player:
+                    await ctx.send("❌ Vous n'êtes pas enregistré. Utilisez `/register` d'abord.")
+                    return
+                summoner_name = player['summoner_name']
+                tag_line = player['tag_line']
+                
+            # Récupérer la dernière partie
+            last_game = await self.get_last_game(summoner_name, tag_line)
+            
+            if not last_game:
+                await ctx.send("❌ Aucune partie récente trouvée.")
+                return
+                
+            embed = self.create_game_embed(last_game)
+            await ctx.send(embed=embed)
+            logger.info(f"Dernière partie affichée pour {summoner_name}#{tag_line}")
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de l'affichage de la dernière partie: {e}")
+            await ctx.send("❌ Une erreur s'est produite lors de la récupération de la dernière partie.")
+

@@ -1,8 +1,9 @@
 # tilttracker/modules/game_processor.py
 import logging
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple, List
 from tilttracker.utils.database import Database
 from tilttracker.modules.riot_api import RiotAPI
+from game_data.calc_classe.calculator_factory import CalculatorFactory
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +11,7 @@ class GameProcessor:
     def __init__(self):
         self.db = Database()
         self.riot_api = RiotAPI()
+        self.calculator_factory = CalculatorFactory()
 
     def ensure_player_exists(self, summoner_name: str, tag_line: str, discord_id: str = None) -> Optional[int]:
         """
@@ -103,11 +105,71 @@ class GameProcessor:
             logger.error(f"Erreur lors de la vérification de la partie {match_id}: {e}")
             return False
 
+    def calculate_match_score(self, match_stats: Dict, player_stats: Dict) -> Tuple[float, str]:
+        """
+        Calcule le score d'une partie pour un joueur.
+        Retourne le score et un résumé de la performance.
+        """
+        try:
+            # Obtenir le calculateur approprié pour le champion
+            calculator = self.calculator_factory.get_calculator(player_stats['champion_id'])
+            champion_class = self.calculator_factory.get_champion_class(player_stats['champion_id'])
+
+            # Extraire les kills de l'équipe
+            team_kills = 0
+            team_id = player_stats['team_id']
+            
+            # Vérifier si match_stats contient directement les participants ou a une structure imbriquée
+            participants = match_stats.get('participants', match_stats.get('info', {}).get('participants', []))
+            
+            for participant in participants:
+                if participant.get('teamId', participant.get('team_id')) == team_id:
+                    team_kills += participant.get('kills', 0)
+
+            # Préparer les données complètes pour le calcul
+            enhanced_stats = {
+                **player_stats,
+                'team_kills': team_kills if team_kills > 0 else 1  # Éviter la division par zéro
+            }
+
+            # Calculer le score de base et le score final
+            base_score = calculator.calculate_base_score(enhanced_stats)
+            final_score = calculator.calculate_final_score(base_score, player_stats['win'])
+
+            # Préparer le résumé de performance
+            performance_summary = (
+                f"Champion: {player_stats['champion_name']} ({champion_class})\n"
+                f"KDA: {player_stats['kills']}/{player_stats['deaths']}/{player_stats['assists']}\n"
+                f"Dégâts: {player_stats['total_damage_dealt_to_champions']:,}\n"
+                f"Score de base: {base_score:.2f}\n"
+                f"Points {'gagnés' if final_score > 0 else 'perdus'}: {final_score}"
+            )
+
+            return final_score, performance_summary
+
+        except Exception as e:
+            logger.error(f"Erreur lors du calcul du score: {e}")
+            logger.exception(e)  # Affiche la stack trace complète
+            return 0, "Erreur lors du calcul du score"
+
+    def _get_team_kills(self, match_data: Dict, team_id: int) -> int:
+        """Calcule le nombre total de kills pour une équipe"""
+        team_kills = 0
+        for participant in match_data['info']['participants']:
+            if participant['teamId'] == team_id:
+                team_kills += participant['kills']
+        return team_kills
+
     def _process_single_match(self, match_id: str, puuid: str) -> bool:
         """
         Traite une seule partie et l'enregistre dans la base de données.
         """
         try:
+            # Vérifier si la partie existe déjà
+            if self._is_match_processed(match_id):
+                logger.info(f"La partie {match_id} a déjà été traitée")
+                return True
+
             # Récupérer les détails de la partie
             match_details = self.riot_api.get_match_details(match_id)
             if not match_details:
@@ -119,6 +181,10 @@ class GameProcessor:
             if not player_stats:
                 logger.warning(f"Impossible de récupérer les stats du joueur pour la partie {match_id}")
                 return False
+
+            # Calculer le score
+            score, performance_summary = self.calculate_match_score(match_details, player_stats)
+            logger.info(f"Score calculé pour la partie {match_id}:\n{performance_summary}")
 
             # Récupérer l'ID du joueur
             player_id = self._get_player_id_by_puuid(puuid)
@@ -132,14 +198,13 @@ class GameProcessor:
                 logger.error(f"Échec de l'enregistrement de la partie {match_id}")
                 return False
 
-            # Préparer les données pour l'enregistrement avec l'ID du match
+            # Ajouter le score aux données du joueur
             player_data = {
                 'player_id': player_id,
                 'match_id': match_db_id,
+                'score': score,
                 **player_stats
             }
-
-            logger.debug(f"Données préparées pour le stockage: {player_data}")
 
             # Enregistrer les stats du joueur
             success = self.db.store_player_performance(match_db_id, player_data)

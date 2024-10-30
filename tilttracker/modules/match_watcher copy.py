@@ -1,3 +1,4 @@
+# main.py
 from tilttracker.modules.discord_bot import TiltTrackerBot
 from tilttracker.modules.match_watcher import MatchWatcher
 import asyncio
@@ -51,26 +52,8 @@ def check_environment():
     
     return required_vars
 
-async def match_checker(watcher: MatchWatcher):
-    """Fonction de vérification périodique des matches"""
-    while True:
-        try:
-            logger.info("Vérification des nouvelles parties...")
-            players = watcher.get_registered_players()
-            
-            for player in players:
-                logger.info(f"Vérification des parties de {player['summoner_name']}#{player['tag_line']}")
-                watcher.process_new_matches(player)
-                await asyncio.sleep(2)  # Pause entre chaque joueur
-                
-            await asyncio.sleep(60)  # Attendre 1 minute avant la prochaine vérification
-            
-        except Exception as e:
-            logger.error(f"Erreur lors de la vérification des parties: {e}")
-            await asyncio.sleep(60)  # En cas d'erreur, attendre avant de réessayer
-
 async def run_match_watcher(watcher: MatchWatcher):
-    """Gère la surveillance des matches"""
+    """Fonction qui gère la surveillance des matches"""
     while True:
         try:
             logger.info("Vérification des nouvelles parties...")
@@ -81,7 +64,6 @@ async def run_match_watcher(watcher: MatchWatcher):
                 await watcher.process_new_matches(player)
                 await asyncio.sleep(2)  # Pause entre chaque joueur
                 
-            logger.info("Vérification terminée, attente de 60 secondes...")
             await asyncio.sleep(60)  # Attente d'une minute avant la prochaine vérification
             
         except Exception as e:
@@ -99,15 +81,14 @@ async def main():
         
         # Vérification configuration
         env_vars = check_environment()
-        riot_api_key = env_vars['RIOT_API_KEY']
         
         logger.info("=== Initialisation du Bot ===")
         logger.info("Création de l'instance du bot...")
-        bot = TiltTrackerBot(riot_api_key=riot_api_key)
+        bot = TiltTrackerBot(riot_api_key=env_vars['RIOT_API_KEY'])
         
         # Initialisation du watcher
         logger.info("=== Initialisation du Match Watcher ===")
-        watcher = MatchWatcher(riot_api_key=riot_api_key)
+        watcher = MatchWatcher()
         
         # Création des tâches asynchrones
         logger.info("Démarrage des services...")
@@ -126,7 +107,6 @@ async def main():
             # Nettoyage
             for task in tasks:
                 task.cancel()
-            watcher.cleanup()
             
     except Exception as e:
         logger.error("=== Erreur Critique ===")
@@ -134,7 +114,7 @@ async def main():
         logger.error(f"Description: {str(e)}")
         logger.error("=====================")
         raise
-
+       
 if __name__ == "__main__":
     try:
         logger.info("=== TiltTracker Bot ===")
