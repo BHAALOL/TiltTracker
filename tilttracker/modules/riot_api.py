@@ -171,6 +171,71 @@ class RiotAPI:
         logger.warning(f"Joueur {puuid} non trouvé dans le match {match_id}")
         return None
 
+
+    async def get_account_info(self, game_name: str, tag_line: str) -> Optional[Dict]:
+        """
+        Récupère les informations détaillées d'un compte Riot à partir du Riot ID.
+        """
+        try:
+            # D'abord récupérer le PUUID
+            puuid = await self.get_puuid(game_name, tag_line)
+            if not puuid:
+                logger.error(f"PUUID non trouvé pour {game_name}#{tag_line}")
+                return None
+
+            # Récupérer les infos du compte via PUUID
+            summoner_url = f"{self.base_urls['euw1']}/lol/summoner/v4/summoners/by-puuid/{puuid}"
+            summoner_data = await self._make_request(summoner_url)
+            
+            if not summoner_data:
+                logger.error(f"Données summoner non trouvées pour {game_name}#{tag_line}")
+                return None
+
+            # Récupérer les infos de rang
+            rank_url = f"{self.base_urls['euw1']}/lol/league/v4/entries/by-summoner/{summoner_data['id']}"
+            rank_data = await self._make_request(rank_url)
+            
+            # Préparer les données de rang
+            ranks = {}
+            if rank_data:
+                for queue in rank_data:
+                    if queue['queueType'] == 'RANKED_SOLO_5x5':
+                        ranks['solo_duo'] = {
+                            'tier': queue['tier'],
+                            'rank': queue['rank'],
+                            'lp': queue['leaguePoints'],
+                            'wins': queue['wins'],
+                            'losses': queue['losses']
+                        }
+                    elif queue['queueType'] == 'RANKED_FLEX_SR':
+                        ranks['flex'] = {
+                            'tier': queue['tier'],
+                            'rank': queue['rank'],
+                            'lp': queue['leaguePoints'],
+                            'wins': queue['wins'],
+                            'losses': queue['losses']
+                        }
+
+            # Construire la réponse
+            account_info = {
+                'summonerId': summoner_data['id'],
+                'accountId': summoner_data.get('accountId'),
+                'puuid': puuid,
+                'name': game_name,
+                'tag_line': tag_line,
+                'profileIconId': summoner_data['profileIconId'],
+                'summonerLevel': summoner_data['summonerLevel'],
+                'ranks': ranks
+            }
+
+            logger.info(f"Informations du compte récupérées pour {game_name}#{tag_line}")
+            return account_info
+
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération des informations du compte: {e}")
+            logger.exception(e)  # Pour voir la stack trace complète
+            return None
+
     async def cleanup(self):
         """Nettoie les ressources"""
         if self.session:

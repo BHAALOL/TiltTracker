@@ -73,20 +73,25 @@ async def run_match_watcher(watcher: MatchWatcher):
     """Gère la surveillance des matches"""
     while True:
         try:
-            logger.info("Vérification des nouvelles parties...")
+            logger.info("=== Début de la vérification des parties ===")
             players = await watcher.get_registered_players()
             
+            logger.info(f"Nombre total de joueurs enregistrés: {len(players)}")
+            
             for player in players:
-                logger.info(f"Vérification des parties de {player['summoner_name']}#{player['tag_line']}")
+                logger.info(f"Traitement du joueur: {player['summoner_name']}#{player['tag_line']}")
                 await watcher.process_new_matches(player)
-                await asyncio.sleep(2)  # Pause entre chaque joueur
+                await asyncio.sleep(5)  # Pause entre chaque joueur
                 
-            logger.info("Vérification terminée, attente de 60 secondes...")
-            await asyncio.sleep(60)  # Attente d'une minute avant la prochaine vérification
+            logger.info("=== Fin de la vérification des parties ===")
+            logger.info("Attente de 60 secondes avant la prochaine vérification...")
+            await asyncio.sleep(60)
             
         except Exception as e:
             logger.error(f"Erreur dans le watcher: {e}")
-            await asyncio.sleep(60)  # En cas d'erreur, on attend avant de réessayer
+            logger.error("Attente avant nouvelle tentative...")
+            await asyncio.sleep(60)
+
 
 async def main():
     """Fonction principale de lancement du bot"""

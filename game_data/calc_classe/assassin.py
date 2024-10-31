@@ -16,7 +16,7 @@ class AssassinCalculator(BaseCalculator):
         damage = stats['total_damage_dealt_to_champions']
 
         # Normalisation des dégâts sur 100
-        max_damage = 55000  # Valeur à ajuster selon les données réelles
+        max_damage = 60000  # Valeur à ajuster selon les données réelles
         normalized_damage = min((damage / max_damage) * 100, 100)
 
         # Calcul du score final

@@ -9,24 +9,37 @@ def cleanup_database():
     db = Database()
     try:
         with db.connection.cursor() as cursor:
-            # Supprimer dans l'ordre à cause des contraintes de clé étrangère
-            logger.info("Suppression des données des tables...")
+            # Désactiver temporairement les contraintes de clés étrangères
+            cursor.execute("SET session_replication_role = replica;")
             
-            cursor.execute("DELETE FROM player_matches")
-            cursor.execute("DELETE FROM matches")
-            logger.info("Tables matches et player_matches vidées")
+            # Supprimer toutes les données des tables dans le bon ordre
+            logger.info("Suppression des données de toutes les tables...")
             
-            # Optionnel : supprimer aussi les joueurs
-            # cursor.execute("DELETE FROM players")
-            # logger.info("Table players vidée")
+            # 1. Supprimer d'abord les tables dépendantes
+            cursor.execute("TRUNCATE TABLE player_matches CASCADE")
+            logger.info("Table player_matches vidée")
+            
+            cursor.execute("TRUNCATE TABLE matches CASCADE")
+            logger.info("Table matches vidée")
+            
+            cursor.execute("TRUNCATE TABLE players CASCADE")
+            logger.info("Table players vidée")
+            
+            # Réactiver les contraintes de clés étrangères
+            cursor.execute("SET session_replication_role = DEFAULT;")
+            
+            # Réinitialiser les séquences d'ID auto-incrémentés
+            cursor.execute("ALTER SEQUENCE players_id_seq RESTART WITH 1")
+            cursor.execute("ALTER SEQUENCE matches_id_seq RESTART WITH 1")
             
         db.connection.commit()
-        logger.info("Nettoyage terminé avec succès")
+        logger.info("Nettoyage complet de la base de données terminé avec succès")
         
     except Exception as e:
         logger.error(f"Erreur lors du nettoyage: {e}")
+        logger.exception(e)  # Affiche la stack trace complète
     finally:
         db.close()
 
 if __name__ == "__main__":
-    cleanup_database()
+    cleanup_database()  
