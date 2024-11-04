@@ -59,23 +59,15 @@ class DiscordPublisher:
             inline=True
         )
 
-        # Score et Points
+        # Points et Total
         points = score_info['final_score']
         points_str = f"+{points}" if points > 0 else str(points)
-        embed.add_field(
-            name="Score de performance",
-            value=f"{score_info['base_score']:.1f}%",
-            inline=True)
-
-        # Nouveau champ pour les points totaux
-        # Formatage du changement de points
         change_str = f"(+{score_info['score_change']})" if score_info['score_change'] > 0 else f"({score_info['score_change']})"
         embed.add_field(
             name="Points",
-            value=f"{points_str}\n"
-                f"Total: {score_info['total_score']} {change_str}",
-            inline=True)
-
+            value=f"{points_str}\nTotal: {score_info['total_score']} {change_str}",
+            inline=True
+        )
 
         # Footer avec la durée de la partie
         match_duration = match_stats.get('game_duration', 0) // 60

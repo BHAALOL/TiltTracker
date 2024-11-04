@@ -85,29 +85,21 @@ class MatchWatcher:
                 logger.warning(f"Impossible de récupérer les stats du joueur pour le match {match_id}")
                 return False
 
-            # Récupérer le calculateur approprié
+            # Calculer le score
             calculator = self.calculator_factory.get_calculator(str(player_stats['champion_id']))
             
-            # Récupérer le nombre total de kills de l'équipe
-            team_id = player_stats['team_id']
-            team_kills = 0
-            for participant in match_details.get('participants', []):
-                if participant.get('teamId') == team_id:
-                    team_kills += participant.get('kills', 0)
-
-            # Préparer les données pour le calcul
-            enhanced_stats = {
-                **player_stats,
-                'team_kills': team_kills if team_kills > 0 else 1  # Éviter division par zéro
-            }
-
-            # Calculer les scores
-            base_score = calculator.calculate_base_score(enhanced_stats)
-            final_score = calculator.calculate_final_score(base_score, player_stats['win'])
-
-            # Ajouter les scores aux stats du joueur
+            # Calculer directement le KDA
+            kills = player_stats['kills']
+            deaths = max(player_stats['deaths'], 1)  # Éviter division par zéro
+            assists = player_stats['assists']
+            kda = (kills + assists) / deaths
+            
+            # Calculer le score final
+            final_score = calculator.calculate_final_score(kda, player_stats['win'])
             player_stats['score'] = final_score
-            player_stats['base_score'] = base_score
+            player_stats['base_score'] = kda
+
+            # Ajouter summoner_name et tag_line aux stats du joueur
             player_stats['summoner_name'] = player['summoner_name']
             player_stats['tag_line'] = player['tag_line']
 
@@ -116,7 +108,7 @@ class MatchWatcher:
             if not match_db_id:
                 return False
 
-            # Stocker la performance du joueur
+            # Stocker la performance du joueur avec le score
             player_stats['player_id'] = player['id']
             player_stats['match_id'] = match_db_id
             if not await self._store_performance(match_db_id, player_stats):
@@ -127,7 +119,7 @@ class MatchWatcher:
 
             # Préparer les informations de score pour Discord
             score_info = {
-                'base_score': base_score,
+                'base_score': kda,
                 'final_score': final_score,
                 'total_score': new_total,
                 'previous_total': previous_total,
@@ -141,12 +133,12 @@ class MatchWatcher:
                 score_info=score_info
             )
 
-            logger.info(f"Match {match_id} traité avec succès pour {player['summoner_name']}")
             return True
 
         except Exception as e:
             logger.error(f"Erreur lors du traitement de la partie {match_id}: {e}")
             return False
+
 
     async def _is_match_processed_for_player(self, match_id: str, player_id: int) -> bool:
         """Vérifie si une partie a déjà été traitée pour un joueur spécifique"""
