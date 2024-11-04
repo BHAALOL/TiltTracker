@@ -85,7 +85,7 @@ class MatchWatcher:
                 logger.warning(f"Impossible de récupérer les stats du joueur pour le match {match_id}")
                 return False
 
-            # Calculer le score
+            # Récupérer le calculateur approprié
             calculator = self.calculator_factory.get_calculator(str(player_stats['champion_id']))
             
             # Récupérer le nombre total de kills de l'équipe
@@ -108,8 +108,6 @@ class MatchWatcher:
             # Ajouter les scores aux stats du joueur
             player_stats['score'] = final_score
             player_stats['base_score'] = base_score
-
-            # Ajouter summoner_name et tag_line aux stats du joueur
             player_stats['summoner_name'] = player['summoner_name']
             player_stats['tag_line'] = player['tag_line']
 
@@ -118,7 +116,7 @@ class MatchWatcher:
             if not match_db_id:
                 return False
 
-            # Stocker la performance du joueur avec le score
+            # Stocker la performance du joueur
             player_stats['player_id'] = player['id']
             player_stats['match_id'] = match_db_id
             if not await self._store_performance(match_db_id, player_stats):
@@ -143,7 +141,7 @@ class MatchWatcher:
                 score_info=score_info
             )
 
-            logger.info(f"Match {match_id} traité avec succès pour {player['summoner_name']} - Score: {final_score}, Total: {new_total} (Évolution: {new_total - previous_total})")
+            logger.info(f"Match {match_id} traité avec succès pour {player['summoner_name']}")
             return True
 
         except Exception as e:
