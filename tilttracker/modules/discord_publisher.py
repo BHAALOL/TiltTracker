@@ -20,11 +20,10 @@ class DiscordPublisher:
         logger.info("Discord Publisher initialisé avec succès")
 
     def create_match_embed(self, player_stats: Dict, match_stats: Dict, score_info: Dict) -> Embed:
-        """Crée un embed Discord pour une partie."""
         # Déterminer la couleur selon la victoire/défaite
         color = Colour.green() if player_stats['win'] else Colour.red()
         
-        # Créer l'embed
+        # Créer l'embed sans l'emoji de rang dans le titre
         embed = Embed(
             title=f"{player_stats['summoner_name']}#{player_stats['tag_line']} - {player_stats['champion_name']} {'✅' if player_stats['win'] else '❌'}",
             color=color
@@ -43,31 +42,44 @@ class DiscordPublisher:
             inline=True
         )
 
-        # Dégâts
+        # Calcul des pourcentages
+        damage_percent = (player_stats['total_damage_dealt_to_champions'] / player_stats['team_total_damage_dealt'] * 100)
+        tank_percent = (player_stats['total_damage_taken'] / player_stats['team_total_damage_taken'] * 100)
+
+        # Déterminer l'emoji pour les dégâts
+        rank_emoji = "👑 " if player_stats['damage_rank'] == 1 else "🤮 " if player_stats['damage_rank'] == player_stats['team_size'] else ""
+
+        # Dégâts avec pourcentage d'équipe et emoji de rang
         dmg_formatted = "{:,}".format(player_stats['total_damage_dealt_to_champions']).replace(',', ' ')
         embed.add_field(
             name="Dégâts aux champions",
-            value=dmg_formatted,
+            value=f"{dmg_formatted} {rank_emoji}\n({damage_percent:.1f}% de l'équipe)",
             inline=True
         )
 
-        # Dégâts subis
+        # Dégâts subis avec pourcentage d'équipe
         tank_dmg = "{:,}".format(player_stats['total_damage_taken']).replace(',', ' ')
         embed.add_field(
             name="Dégâts subis",
-            value=tank_dmg,
+            value=f"{tank_dmg}\n({tank_percent:.1f}% de l'équipe)",
             inline=True
         )
 
-        # Points et Total
+        # Score et Points
         points = score_info['final_score']
         points_str = f"+{points}" if points > 0 else str(points)
+        embed.add_field(
+            name="Score de performance",
+            value=f"{points_str}",
+            inline=True)
+
+        # Points totaux
         change_str = f"(+{score_info['score_change']})" if score_info['score_change'] > 0 else f"({score_info['score_change']})"
         embed.add_field(
             name="Points",
-            value=f"{points_str}\nTotal: {score_info['total_score']} {change_str}",
-            inline=True
-        )
+            value=f"{points_str}\n"
+                f"Total: {score_info['total_score']} {change_str}",
+            inline=True)
 
         # Footer avec la durée de la partie
         match_duration = match_stats.get('game_duration', 0) // 60

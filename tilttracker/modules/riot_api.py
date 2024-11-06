@@ -146,10 +146,38 @@ class RiotAPI:
         if not match_data:
             return None
             
-        # Trouver les stats du joueur dans la partie
+        # Initialiser les totaux d'équipe
+        team_totals = {
+            'team1': {
+                'kills': 0,
+                'damage_dealt': 0,
+                'damage_taken': 0,
+                'players_damage': []  # Liste pour stocker les dégâts de chaque joueur
+            },
+            'team2': {
+                'kills': 0,
+                'damage_dealt': 0,
+                'damage_taken': 0,
+                'players_damage': []  # Liste pour stocker les dégâts de chaque joueur
+            }
+        }
+        
+        player_stats = None
+        
+        # Parcourir tous les participants pour calculer les totaux
         for participant in match_data['info']['participants']:
+            team_key = 'team1' if participant['teamId'] == 100 else 'team2'
+            
+            # Ajouter aux totaux de l'équipe
+            team_totals[team_key]['kills'] += participant['kills']
+            team_totals[team_key]['damage_dealt'] += participant['totalDamageDealtToChampions']
+            team_totals[team_key]['damage_taken'] += participant['totalDamageTaken']
+            team_totals[team_key]['players_damage'].append(participant['totalDamageDealtToChampions'])
+            
+            # Si c'est notre joueur, sauvegarder ses stats
             if participant['puuid'] == puuid:
-                stats = {
+                team_id = participant['teamId']
+                player_stats = {
                     'champion_id': participant['championId'],
                     'champion_name': participant['championName'],
                     'kills': participant['kills'],
@@ -162,15 +190,31 @@ class RiotAPI:
                     'vision_score': participant['visionScore'],
                     'gold_earned': participant['goldEarned'],
                     'win': participant['win'],
-                    'team_id': participant['teamId']
+                    'team_id': team_id
                 }
-                
-                logger.info(f"Stats récupérées pour le joueur {puuid} dans le match {match_id}")
-                return stats
-                
+
+        if player_stats:
+            # Déterminer quelle équipe est celle du joueur
+            team_key = 'team1' if player_stats['team_id'] == 100 else 'team2'
+            
+            # Calculer le rang en dégâts du joueur
+            team_damages = sorted(team_totals[team_key]['players_damage'], reverse=True)
+            damage_rank = team_damages.index(player_stats['total_damage_dealt_to_champions']) + 1
+            
+            # Ajouter les totaux de l'équipe et le rang aux stats du joueur
+            player_stats.update({
+                'team_total_kills': team_totals[team_key]['kills'],
+                'team_total_damage_dealt': team_totals[team_key]['damage_dealt'],
+                'team_total_damage_taken': team_totals[team_key]['damage_taken'],
+                'damage_rank': damage_rank,
+                'team_size': len(team_totals[team_key]['players_damage'])
+            })
+            
+            logger.info(f"Stats récupérées pour le joueur {puuid} dans le match {match_id}")
+            return player_stats
+        
         logger.warning(f"Joueur {puuid} non trouvé dans le match {match_id}")
         return None
-
 
     async def get_account_info(self, game_name: str, tag_line: str) -> Optional[Dict]:
         """

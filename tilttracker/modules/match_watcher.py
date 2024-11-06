@@ -47,7 +47,7 @@ class MatchWatcher:
         try:
             logger.info(f"Traitement du joueur: {player['summoner_name']}#{player['tag_line']}")
             
-            matches = await self.riot_api.get_recent_aram_matches(player['riot_puuid'], count=3)
+            matches = await self.riot_api.get_recent_aram_matches(player['riot_puuid'], count=5)
             if not matches:
                 logger.info(f"Aucune partie ARAM récente pour {player['summoner_name']}#{player['tag_line']}")
                 return
@@ -85,19 +85,12 @@ class MatchWatcher:
                 logger.warning(f"Impossible de récupérer les stats du joueur pour le match {match_id}")
                 return False
 
-            # Calculer le score
+            # Obtenir le calculateur et calculer le score
             calculator = self.calculator_factory.get_calculator(str(player_stats['champion_id']))
-            
-            # Calculer directement le KDA
-            kills = player_stats['kills']
-            deaths = max(player_stats['deaths'], 1)  # Éviter division par zéro
-            assists = player_stats['assists']
-            kda = (kills + assists) / deaths
-            
-            # Calculer le score final
-            final_score = calculator.calculate_final_score(kda, player_stats['win'])
+            final_score = calculator.calculate_score(player_stats, player_stats['win'])
+
+            # Ajouter les scores aux stats du joueur
             player_stats['score'] = final_score
-            player_stats['base_score'] = kda
 
             # Ajouter summoner_name et tag_line aux stats du joueur
             player_stats['summoner_name'] = player['summoner_name']
@@ -119,7 +112,6 @@ class MatchWatcher:
 
             # Préparer les informations de score pour Discord
             score_info = {
-                'base_score': kda,
                 'final_score': final_score,
                 'total_score': new_total,
                 'previous_total': previous_total,
@@ -133,6 +125,7 @@ class MatchWatcher:
                 score_info=score_info
             )
 
+            logger.info(f"Match {match_id} traité avec succès pour {player['summoner_name']} - Score: {final_score}")
             return True
 
         except Exception as e:
