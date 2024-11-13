@@ -11,44 +11,67 @@ class MatchScoreCalculator:
         Args:
             champion_class: ChampionClass.DPS ou ChampionClass.TANK
         """
+        self.champion_class = champion_class
         self.coefficients = ChampionClassConfig.get_coefficients(champion_class)
-        
-    def calculate_score(self, stats: Dict, is_win: bool) -> int:
+
+    def calculate_performance_score(self, stats: Dict) -> float:
         """
-        Calcule le score final selon les formules fournies
+        Calcule le score de performance selon la classe du champion
         
         Args:
-            stats: Dictionnaire contenant les statistiques du match
-            is_win: True si victoire, False si défaite
+            stats: Statistiques du joueur
             
         Returns:
-            Score calculé (positif pour victoire, négatif pour défaite)
+            Score de performance qui servira à classer le joueur
         """
-        try:
-            # Extraction des statistiques
-            kills = stats['kills']
-            assists = stats['assists']
-            deaths = max(1, stats['deaths'])  # Éviter division par zéro
-            team_kills = max(1, stats['team_total_kills'])
-            damage_dealt = stats['total_damage_dealt_to_champions']
-            damage_taken = stats['total_damage_taken']
-            team_damage_dealt = max(1, stats['team_total_damage_dealt'])
-            team_damage_taken = max(1, stats['team_total_damage_taken'])
-            
-            # Calcul des ratios
-            damage_ratio = (damage_dealt * 100 / team_damage_dealt * self.coefficients.rd)
-            tank_ratio = (damage_taken * 100 / team_damage_taken * self.coefficients.rt)
-            kda_ratio = (kills + assists) / deaths
-            kill_participation = (kills + assists) / team_kills * 100
-            
-            if is_win:
-                # POINT_DPS_WIN = (((DI × 100/TTDI × RD) + (DS × 100/TTDS × RT)) × ((K + A)/D) + ((K + A)/TTKT × 100)) × (15/10)
-                return int((((damage_ratio + tank_ratio) * kda_ratio) + kill_participation) * 1.5)
-            else:
-                # POINT_DPS_LOSS = -(-((DI × 100/TTDI × RD + DS × 100/TTDS × RT) × ((K + A)/D) + ((K + A)/TTKT × 100)) × 15/10 - 500) × (-1)
-                base_calc = (((damage_ratio + tank_ratio) * kda_ratio) + kill_participation) * 1.5
-                return int(-(-base_calc - 100) * -1)
-                
-        except Exception as e:
-            logger.error(f"Erreur lors du calcul du score: {e}")
-            return 0
+        # Calcul du Kill Participation (KP)
+        kills_assists = stats['kills'] + stats['assists']
+        team_kills = stats['team_kills'] if stats['team_kills'] > 0 else 1
+        kill_participation = (kills_assists / team_kills) * 100
+        
+        # Dégâts aux champions
+        damage_score = stats['total_damage_dealt_to_champions']
+        
+        # Dégâts absorbés et mitigés
+        tank_score = stats['total_damage_taken'] + stats['damage_self_mitigated']
+        
+        # Score d'utilité (CC + vision)
+        utility_score = stats['total_time_crowd_control_dealt'] + (stats['vision_score'] * 100)
+
+        # Calculer le score selon la classe
+        if self.champion_class == ChampionClass.TANK:
+            return (
+                (tank_score * 0.5) +          # 50% tank
+                (kill_participation * 0.3) +   # 30% participation
+                (damage_score * 0.2)          # 20% dégâts
+            )
+        else:  # DPS
+            return (
+                (damage_score * 0.6) +        # 60% dégâts
+                (kill_participation * 0.3) +   # 30% participation
+                (utility_score * 0.1)         # 10% utility
+            )
+
+    def calculate_score(self, stats: Dict, rank_in_team: int, is_victory: bool) -> int:
+        """
+        Calcule le score final en fonction du rang dans l'équipe et du résultat
+        """
+        # Points selon le rang et la victoire/défaite
+        victory_points = {
+            1: 400,   # 1er
+            2: 300,   # 2ème
+            3: 200,   # 3ème
+            4: 100,   # 4ème
+            5: -100   # 5ème
+        }
+
+        defeat_points = {
+            1: 100,    # 1er
+            2: -100,   # 2ème
+            3: -200,   # 3ème
+            4: -300,   # 4ème
+            5: -400    # 5ème
+        }
+
+        points_table = victory_points if is_victory else defeat_points
+        return points_table.get(rank_in_team, 0)

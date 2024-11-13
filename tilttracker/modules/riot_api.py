@@ -135,6 +135,89 @@ class RiotAPI:
         logger.info(f"Détails récupérés pour le match {match_id}")
         return match_details
 
+    async def get_team_match_stats(self, match_id: str, player_puuid: str) -> List[Dict[str, Any]]:
+        """
+        Récupère les statistiques de tous les joueurs de l'équipe d'un joueur spécifique.
+        
+        Args:
+            match_id: ID de la partie
+            player_puuid: PUUID du joueur dont on veut l'équipe
+            
+        Returns:
+            Liste des stats de chaque joueur de l'équipe
+            None si erreur
+        """
+        try:
+            # Récupérer les données complètes du match
+            match_data = await self._make_request(
+                f"{self.base_urls['europe']}/lol/match/v5/matches/{match_id}"
+            )
+            
+            if not match_data:
+                return None
+                
+            # Trouver l'équipe du joueur
+            player_data = None
+            player_team_id = None
+            for participant in match_data['info']['participants']:
+                if participant['puuid'] == player_puuid:
+                    player_data = participant
+                    player_team_id = participant['teamId']
+                    break
+                    
+            if not player_team_id:
+                logger.error(f"Joueur {player_puuid} non trouvé dans le match {match_id}")
+                return None
+                
+            # Calculer les totaux de l'équipe
+            team_totals = {
+                'kills': 0,
+                'damage_dealt': 0,
+                'damage_taken': 0
+            }
+            
+            # Récupérer les stats de tous les joueurs de l'équipe
+            team_stats = []
+            for participant in match_data['info']['participants']:
+                if participant['teamId'] == player_team_id:
+                    team_totals['kills'] += participant['kills']
+                    team_totals['damage_dealt'] += participant['totalDamageDealtToChampions']
+                    team_totals['damage_taken'] += participant['totalDamageTaken']
+            
+            # Créer les statistiques détaillées pour chaque joueur
+            for participant in match_data['info']['participants']:
+                if participant['teamId'] == player_team_id:
+                    player_stats = {
+                        'puuid': participant['puuid'],
+                        'champion_id': participant['championId'],
+                        'champion_name': participant['championName'],
+                        'kills': participant['kills'],
+                        'deaths': participant['deaths'],
+                        'assists': participant['assists'],
+                        'total_damage_dealt_to_champions': participant['totalDamageDealtToChampions'],
+                        'total_damage_taken': participant['totalDamageTaken'],
+                        'damage_self_mitigated': participant['damageSelfMitigated'],
+                        'total_time_crowd_control_dealt': participant['totalTimeCCDealt'],
+                        'vision_score': participant['visionScore'],
+                        'gold_earned': participant['goldEarned'],
+                        'win': participant['win'],
+                        'team_id': participant['teamId'],
+                        # Ajouter les totaux de l'équipe pour les calculs de pourcentage
+                        'team_kills': team_totals['kills'],
+                        'team_total_damage_dealt': team_totals['damage_dealt'],
+                        'team_total_damage_taken': team_totals['damage_taken']
+                    }
+                    team_stats.append(player_stats)
+            
+            logger.info(f"Stats d'équipe récupérées pour le match {match_id} - "
+                    f"{len(team_stats)} joueurs trouvés")
+            return team_stats
+
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération des stats d'équipe: {e}")
+            logger.exception(e)
+            return None
+
     async def get_player_match_stats(self, match_id: str, puuid: str) -> Optional[Dict[str, Any]]:
         """
         Récupère les statistiques d'un joueur spécifique dans une partie.

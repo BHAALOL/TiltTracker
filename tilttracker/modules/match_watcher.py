@@ -20,7 +20,7 @@ class MatchWatcher:
         """Récupère la liste des joueurs enregistrés"""
         try:
             with self.db.connection.cursor() as cursor:
-                # Ajout de logging pour debug
+                # Ajout de logging pour debug"
                 cursor.execute("SELECT COUNT(*) FROM players")
                 total_count = cursor.fetchone()[0]
                 logger.info(f"Nombre total de joueurs dans la base: {total_count}")
@@ -69,6 +69,9 @@ class MatchWatcher:
             logger.error(f"Erreur lors du traitement des parties pour {player['summoner_name']}: {e}")
 
     async def _process_single_match(self, match_id: str, player: Dict) -> bool:
+        """
+        Traite une seule partie et l'enregistre dans la base de données.
+        """
         try:
             # Récupérer le total actuel des points avant le nouveau match
             previous_total = await self.db.get_player_total_score(player['id'])
@@ -79,32 +82,75 @@ class MatchWatcher:
                 logger.warning(f"Impossible de récupérer les détails pour le match {match_id}")
                 return False
 
-            # Récupérer les stats du joueur pour ce match
-            player_stats = await self.riot_api.get_player_match_stats(match_id, player['riot_puuid'])
-            if not player_stats:
-                logger.warning(f"Impossible de récupérer les stats du joueur pour le match {match_id}")
+            # Récupérer les stats de tous les joueurs de l'équipe
+            team_stats = await self.riot_api.get_team_match_stats(match_id, player['riot_puuid'])
+            if not team_stats:
+                logger.warning(f"Impossible de récupérer les stats d'équipe pour le match {match_id}")
                 return False
 
-            # Obtenir le calculateur et calculer le score
-            calculator = self.calculator_factory.get_calculator(str(player_stats['champion_id']))
-            final_score = calculator.calculate_score(player_stats, player_stats['win'])
-
-            # Ajouter les scores aux stats du joueur
-            player_stats['score'] = final_score
+            # Trouver les stats du joueur dans les stats d'équipe
+            player_stats = next((p for p in team_stats if p['puuid'] == player['riot_puuid']), None)
+            if not player_stats:
+                logger.warning(f"Stats du joueur non trouvées dans l'équipe")
+                return False
 
             # Ajouter summoner_name et tag_line aux stats du joueur
             player_stats['summoner_name'] = player['summoner_name']
             player_stats['tag_line'] = player['tag_line']
+
+            # Calculer le rang des dégâts et ajouter team_size
+            team_damages = [p['total_damage_dealt_to_champions'] for p in team_stats 
+                        if p['team_id'] == player_stats['team_id']]
+            team_damages.sort(reverse=True)
+            player_stats['damage_rank'] = team_damages.index(player_stats['total_damage_dealt_to_champions']) + 1
+            player_stats['team_size'] = len(team_damages)
+
+            # Calculer les scores de performance pour chaque joueur de l'équipe
+            team_performances = []
+            for p_stats in team_stats:
+                calculator = self.calculator_factory.get_calculator(str(p_stats['champion_id']))
+                performance_score = calculator.calculate_performance_score(p_stats)
+                team_performances.append({
+                    'puuid': p_stats['puuid'],
+                    'performance_score': performance_score,
+                    'stats': p_stats
+                })
+
+            # Trier l'équipe par score de performance
+            team_performances.sort(key=lambda x: x['performance_score'], reverse=True)
+
+            # Trouver le rang du joueur dans son équipe
+            player_rank = next(i + 1 for i, p in enumerate(team_performances) 
+                            if p['puuid'] == player['riot_puuid'])
+
+            # Calculer les points selon le rang et la victoire/défaite
+            calculator = self.calculator_factory.get_calculator(str(player_stats['champion_id']))
+            final_score = calculator.calculate_score(
+                stats=player_stats,
+                rank_in_team=player_rank,
+                is_victory=player_stats['win']
+            )
+
+            # Ajouter le rang aux stats du joueur
+            player_stats['rank_in_team'] = player_rank
 
             # Stocker le match dans la base de données
             match_db_id = await self._store_match(match_details)
             if not match_db_id:
                 return False
 
-            # Stocker la performance du joueur avec le score
-            player_stats['player_id'] = player['id']
-            player_stats['match_id'] = match_db_id
-            if not await self._store_performance(match_db_id, player_stats):
+            # Stocker la performance du joueur avec le score et le rang
+            player_data = {
+                'player_id': player['id'],
+                'match_id': match_db_id,
+                'score': final_score,
+                'rank_in_team': player_rank,
+                **player_stats
+            }
+
+            # Enregistrer les stats du joueur
+            success = await self._store_performance(match_db_id, player_data)
+            if not success:
                 return False
 
             # Récupérer le nouveau total après l'ajout du score
@@ -115,7 +161,9 @@ class MatchWatcher:
                 'final_score': final_score,
                 'total_score': new_total,
                 'previous_total': previous_total,
-                'score_change': new_total - previous_total
+                'score_change': new_total - previous_total,
+                'rank_in_team': player_rank,
+                'base_score': final_score  # Ajouté pour la compatibilité
             }
 
             # Publier sur Discord
@@ -125,13 +173,14 @@ class MatchWatcher:
                 score_info=score_info
             )
 
-            logger.info(f"Match {match_id} traité avec succès pour {player['summoner_name']} - Score: {final_score}")
+            logger.info(f"Match {match_id} traité avec succès pour {player['summoner_name']} "
+                    f"(Rang: {player_rank}, Score: {final_score})")
             return True
 
         except Exception as e:
             logger.error(f"Erreur lors du traitement de la partie {match_id}: {e}")
+            logger.exception(e)
             return False
-
 
     async def _is_match_processed_for_player(self, match_id: str, player_id: int) -> bool:
         """Vérifie si une partie a déjà été traitée pour un joueur spécifique"""

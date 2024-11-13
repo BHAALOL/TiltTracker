@@ -1,37 +1,32 @@
-# game_data/calc_classe/support_mage.py
 from typing import Dict
 from .base_calculator import BaseCalculator
 
 class SupportMageCalculator(BaseCalculator):
-    def calculate_base_score(self, stats: Dict) -> float:
+    def calculate_performance_score(self, stats: Dict) -> float:
         """
-        Calcule le score pour un SUPPORT MAGE
-        Score_Base = (KP × 0.5) + (Utility × 0.4) + (Tank_Score × 0.1)
+        Calcule le score de performance pour un SUPPORT MAGE
+        Score = (Kill Participation × 0.4) + (Utility × 0.4) + (Dégâts × 0.2)
+        
+        Args:
+            stats: Dictionnaire contenant les statistiques du joueur
+            
+        Returns:
+            Score de performance qui servira à classer le joueur
         """
-        # Calcul du Tank Score
-        tank_score = (stats['total_damage_taken'] + stats['damage_self_mitigated']) / 2
+        # Calcul du Kill Participation (KP)
+        kills_assists = stats['kills'] + stats['assists']
+        team_kills = stats['team_kills'] if stats['team_kills'] > 0 else 1
+        kill_participation = (kills_assists / team_kills) * 100
         
-        # Calcul du Kill Participation (accent sur les assists)
-        team_kills = stats['team_kills']
-        kp = ((stats['kills'] * 0.5 + stats['assists']) / team_kills * 100) if team_kills > 0 else 0
+        # Score d'utilité (CC + vision)
+        utility_score = stats['total_time_crowd_control_dealt']
         
-        # Calcul du score d'utilité (heal + shield + damage)
-        utility = (
-            stats.get('total_heal', 0) + 
-            stats.get('total_shield', 0) + 
-            (stats['total_damage_dealt_to_champions'] * 0.5)
-        )
-
-        # Normalisation des scores sur 100
-        max_tank_score = 40000   # Valeur plus faible pour les supports mages
-        max_utility = 30000      # Valeur à ajuster selon les données réelles
-
-        normalized_tank_score = min((tank_score / max_tank_score) * 100, 100)
-        normalized_utility = min((utility / max_utility) * 100, 100)
-
-        # Calcul du score final
+        # Dégâts aux champions
+        damage_score = stats['total_damage_dealt_to_champions']
+        
+        # Score final
         return (
-            (kp * 0.5) +
-            (normalized_utility * 0.4) +
-            (normalized_tank_score * 0.1)
+            (kill_participation * 0.4) +   # 40% participation
+            (utility_score * 0.4) +        # 40% utility
+            (damage_score * 0.2)          # 20% dégâts
         )

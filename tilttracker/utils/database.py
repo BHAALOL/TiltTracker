@@ -107,10 +107,15 @@ class Database:
             raise
 
     async def store_player_performance(self, match_id: int, player_data: dict) -> bool:
-        """Version asynchrone de store_player_performance"""
+        """
+        Stocke les performances d'un joueur pour un match donné.
+        
+        Args:
+            match_id: ID du match dans la base de données
+            player_data: Données du joueur incluant le rang dans l'équipe
+        """
         try:
-            logger.info(f"Tentative d'enregistrement des performances pour le match {match_id}")
-            logger.debug(f"Données du joueur: {player_data}")
+            logger.info(f"Enregistrement des performances pour le match {match_id}")
             
             with self.connection.cursor() as cursor:
                 cursor.execute("""
@@ -119,13 +124,15 @@ class Database:
                         kills, deaths, assists,
                         total_damage_dealt_to_champions, total_damage_taken,
                         damage_self_mitigated, total_time_crowd_control_dealt,
-                        vision_score, gold_earned, win, team_id, score
+                        vision_score, gold_earned, win, team_id, score,
+                        rank_in_team  -- Nouveau champ
                     ) VALUES (
                         %(player_id)s, %(match_id)s, %(champion_id)s, %(champion_name)s,
                         %(kills)s, %(deaths)s, %(assists)s,
                         %(total_damage_dealt_to_champions)s, %(total_damage_taken)s,
                         %(damage_self_mitigated)s, %(total_time_crowd_control_dealt)s,
-                        %(vision_score)s, %(gold_earned)s, %(win)s, %(team_id)s, %(score)s
+                        %(vision_score)s, %(gold_earned)s, %(win)s, %(team_id)s, %(score)s,
+                        %(rank_in_team)s  -- Nouveau champ
                     )
                 """, player_data)
                 
@@ -138,45 +145,12 @@ class Database:
             logger.error(f"Erreur lors du stockage des performances du joueur: {e}")
             return False
 
-    def get_player_by_discord_id(self, discord_id: str) -> dict:
-        """
-        Récupère les informations d'un joueur par son ID Discord.
-        """
-        try:
-            with self.connection.cursor(cursor_factory=DictCursor) as cursor:
-                cursor.execute("""
-                    SELECT * FROM players WHERE discord_id = %s
-                """, (discord_id,))
-                
-                result = cursor.fetchone()
-                return dict(result) if result else None
-                
-        except psycopg2.Error as e:
-            logger.error(f"Erreur lors de la récupération du joueur: {e}")
-            return None
-
-    def get_player_by_riot_id(self, riot_puuid: str) -> dict:
-        """
-        Récupère les informations d'un joueur par son PUUID Riot.
-        """
-        try:
-            with self.connection.cursor(cursor_factory=DictCursor) as cursor:
-                cursor.execute("""
-                    SELECT * FROM players WHERE riot_puuid = %s
-                """, (riot_puuid,))
-                
-                result = cursor.fetchone()
-                return dict(result) if result else None
-                
-        except psycopg2.Error as e:
-            logger.error(f"Erreur lors de la récupération du joueur: {e}")
-            return None
-
     async def get_player_stats(self, game_name: str, tag_line: str) -> dict:
-        """Récupère les statistiques complètes d'un joueur"""
+        """
+        Récupère les statistiques complètes d'un joueur, incluant les rangs moyens
+        """
         try:
             with self.connection.cursor() as cursor:
-                # Statistiques générales
                 cursor.execute("""
                     SELECT 
                         COUNT(*) as total_games,
@@ -186,57 +160,15 @@ class Database:
                         AVG(assists) as avg_assists,
                         AVG(score) as avg_score,
                         MAX(score) as best_score,
-                        SUM(score) as total_score
+                        SUM(score) as total_score,
+                        AVG(rank_in_team) as avg_rank,  -- Nouvelle stat
+                        COUNT(CASE WHEN rank_in_team = 1 THEN 1 END) as first_place_count  -- Nouvelle stat
                     FROM player_matches pm
                     JOIN players p ON p.id = pm.player_id
                     WHERE p.summoner_name = %s AND p.tag_line = %s
                 """, (game_name, tag_line))
                 
                 stats = dict(zip([column[0] for column in cursor.description], cursor.fetchone()))
-                
-                # Champions les plus joués
-                cursor.execute("""
-                    SELECT 
-                        champion_name,
-                        COUNT(*) as games,
-                        SUM(CASE WHEN win THEN 1 ELSE 0 END)::float / COUNT(*) * 100 as winrate
-                    FROM player_matches pm
-                    JOIN players p ON p.id = pm.player_id
-                    WHERE p.summoner_name = %s AND p.tag_line = %s
-                    GROUP BY champion_name
-                    ORDER BY games DESC, winrate DESC
-                    LIMIT 3
-                """, (game_name, tag_line))
-                
-                stats['top_champions'] = [
-                    dict(zip([column[0] for column in cursor.description], row))
-                    for row in cursor.fetchall()
-                ]
-                
-                # Calculer les stats dérivées
-                stats['losses'] = stats['total_games'] - stats['wins']
-                stats['winrate'] = (stats['wins'] / stats['total_games'] * 100) if stats['total_games'] > 0 else 0
-                stats['kda_ratio'] = ((stats['avg_kills'] + stats['avg_assists']) / stats['avg_deaths']) if stats['avg_deaths'] > 0 else float('inf')
-                
-                # Récupérer le classement
-                cursor.execute("""
-                    WITH rankings AS (
-                        SELECT 
-                            p.summoner_name,
-                            p.tag_line,
-                            SUM(score) as total_score,
-                            RANK() OVER (ORDER BY SUM(score) DESC) as rank
-                        FROM player_matches pm
-                        JOIN players p ON p.id = pm.player_id
-                        GROUP BY p.id, p.summoner_name, p.tag_line
-                    )
-                    SELECT rank
-                    FROM rankings
-                    WHERE summoner_name = %s AND tag_line = %s
-                """, (game_name, tag_line))
-                
-                stats['rank'] = cursor.fetchone()[0]
-                
                 return stats
                 
         except Exception as e:

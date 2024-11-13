@@ -47,7 +47,15 @@ class DiscordPublisher:
         tank_percent = (player_stats['total_damage_taken'] / player_stats['team_total_damage_taken'] * 100)
 
         # Déterminer l'emoji pour les dégâts
-        rank_emoji = "👑 " if player_stats['damage_rank'] == 1 else "🤮 " if player_stats['damage_rank'] == player_stats['team_size'] else ""
+        damage_rank = player_stats.get('damage_rank', 0)
+        team_size = player_stats.get('team_size', 5)
+        rank_emoji = ""
+        if damage_rank > 0:  # Seulement si on a l'information
+            if damage_rank == 1:
+                rank_emoji = "👑 "
+            elif damage_rank == team_size:
+                rank_emoji = "🤮 "
+
 
         # Dégâts avec pourcentage d'équipe et emoji de rang
         dmg_formatted = "{:,}".format(player_stats['total_damage_dealt_to_champions']).replace(',', ' ')

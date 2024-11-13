@@ -2,39 +2,48 @@ from abc import ABC, abstractmethod
 from typing import Dict
 
 class BaseCalculator(ABC):
-    def calculate_final_score(self, base_score: float, win: bool) -> int:
+    # Points attribués selon le rang et la victoire/défaite
+    VICTORY_POINTS = {
+        1: 400,   # 1er
+        2: 300,   # 2ème
+        3: 200,   # 3ème
+        4: 100,   # 4ème
+        5: -100   # 5ème
+    }
+
+    DEFEAT_POINTS = {
+        1: 100,    # 1er
+        2: -100,   # 2ème
+        3: -200,   # 3ème
+        4: -300,   # 4ème
+        5: -400    # 5ème
+    }
+
+    def calculate_score(self, stats: Dict, rank_in_team: int, is_victory: bool) -> int:
         """
-        Calcule le score final en fonction du KDA et de la victoire/défaite
-        Score final = 15 * KDA * (1 ou -1 selon victoire/défaite)
+        Calcule le score final en fonction du rang dans l'équipe et du résultat
+        
+        Args:
+            stats: Statistiques du joueur
+            rank_in_team: Position du joueur dans l'équipe (1-5)
+            is_victory: True si victoire, False si défaite
+        
+        Returns:
+            Points attribués selon le classement
         """
-        # Pour debug
-        print(f"KDA reçu (base_score): {base_score}")
-        
-        # Calcul des points (positifs pour une victoire, négatifs pour une défaite)
-        multiplier = 1 if win else -1
-        score = round(15 * base_score * multiplier)
-        
-        # Pour debug
-        print(f"Score calculé: {score}")
-        
-        return score
+        points_table = self.VICTORY_POINTS if is_victory else self.DEFEAT_POINTS
+        return points_table.get(rank_in_team, 0)
 
     @abstractmethod
-    def calculate_base_score(self, stats: Dict) -> float:
+    def calculate_performance_score(self, stats: Dict) -> float:
         """
-        Calcule le KDA: (Kills + Assists) / Deaths
+        Calcule le score de performance qui servira à classer les joueurs
+        Cette méthode doit être implémentée par chaque classe spécifique
+        
+        Args:
+            stats: Statistiques du joueur
+            
+        Returns:
+            Score de performance (plus il est élevé, meilleur est le classement)
         """
-        kills = stats['kills']
-        deaths = stats['deaths']
-        assists = stats['assists']
-        
-        # Pour debug
-        print(f"Kills: {kills}, Deaths: {deaths}, Assists: {assists}")
-        
-        # Éviter division par zéro
-        kda = (kills + assists) / max(deaths, 1)
-        
-        # Pour debug
-        print(f"KDA calculé: {kda}")
-        
-        return kda
+        pass
