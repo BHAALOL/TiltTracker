@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TiltTracker - {% block title %}{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'dark-primary': '#1a1a1a',
+                        'dark-secondary': '#2d2d2d',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-dark-primary text-gray-200 min-h-screen">
+    <nav class="bg-dark-secondary p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="text-xl font-bold">TiltTracker</div>
+            <div>
+                <a href="/" class="px-4 py-2 hover:text-blue-400">Accueil</a>
+                <a href="/leaderboard" class="px-4 py-2 hover:text-blue-400">Classement</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-4">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Classement{% endblock %}
+
+{% block content %}
+<div class="bg-dark-secondary rounded-lg p-6 shadow-lg">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">Classement des joueurs</h1>
+        <button 
+            id="compareBtn" 
+            onclick="compareSelected()"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50"
+            disabled
+        >
+            Comparer les joueurs
+        </button>
+    </div>
+    
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="border-b border-gray-600">
+                <tr>
+                    <th class="px-4 py-3 text-left">Sélection</th>
+                    <th class="px-4 py-3 text-left">Rang</th>
+                    <th class="px-4 py-3 text-left">Joueur</th>
+                    <th class="px-4 py-3 text-right">Score Total</th>
+                    <th class="px-4 py-3 text-right">Parties</th>
+                    <th class="px-4 py-3 text-right">Winrate</th>
+                    <th class="px-4 py-3 text-right">Score Moyen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in players %}
+                <tr class="hover:bg-gray-700">
+                    <td class="px-4 py-3">
+                        <input 
+                            type="checkbox" 
+                            name="comparePlayer" 
+                            value="{{ player.summoner_name }}|{{ player.tag_line }}"
+                            onclick="updateCompareButton()"
+                            class="w-4 h-4 rounded border-gray-600 bg-gray-700 checked:bg-blue-600"
+                        >
+                    </td>
+                    <td class="px-4 py-3 text-left">{{ loop.index }}</td>
+                    <td class="px-4 py-3 text-left">
+                        <a href="/player/{{ player.summoner_name }}/{{ player.tag_line }}" 
+                           class="hover:text-blue-400">
+                            {{ player.summoner_name }}#{{ player.tag_line }}
+                        </a>
+                    </td>
+                    <td class="px-4 py-3 text-right">{{ player.total_score }}</td>
+                    <td class="px-4 py-3 text-right">{{ player.total_games }}</td>
+                    <td class="px-4 py-3 text-right">{{ "%.1f"|format(player.winrate) }}%</td>
+                    <td class="px-4 py-3 text-right">{{ "%.1f"|format(player.avg_score) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function updateCompareButton() {
+    const checkboxes = document.querySelectorAll('input[name="comparePlayer"]:checked');
+    const compareBtn = document.getElementById('compareBtn');
+    compareBtn.disabled = checkboxes.length !== 2;
+}
+
+function compareSelected() {
+    const checkboxes = document.querySelectorAll('input[name="comparePlayer"]:checked');
+    if (checkboxes.length === 2) {
+        const [player1, player2] = Array.from(checkboxes).map(cb => cb.value.split('|'));
+        window.location.href = `/compare/${player1[0]}/${player1[1]}/${player2[0]}/${player2[1]}`;
+    }
+}
+</script>
+{% endblock %}

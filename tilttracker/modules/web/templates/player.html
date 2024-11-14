@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}{{ stats.summoner_name }}{% endblock %}
+
+{% block content %}
+<!-- Section profil et stats en haut -->
+<div class="grid gap-6 mb-8">
+    <!-- En-tête du profil -->
+    <div class="bg-dark-secondary rounded-lg p-6 shadow-lg">
+        <div class="flex items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold">{{ stats.summoner_name }}#{{ stats.tag_line }}</h1>
+                <p class="text-blue-400">Score Total: {{ stats.total_score }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistiques générales en grille -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- KDA -->
+        <div class="bg-dark-secondary rounded-lg p-4 shadow-lg">
+            <h2 class="text-lg font-bold mb-3">KDA Moyen</h2>
+            <div class="grid grid-cols-3 text-center">
+                <div>
+                    <div class="text-xl font-bold text-green-400">{{ "%.1f"|format(stats.avg_kills) }}</div>
+                    <div class="text-sm text-gray-400">Kills</div>
+                </div>
+                <div>
+                    <div class="text-xl font-bold text-red-400">{{ "%.1f"|format(stats.avg_deaths) }}</div>
+                    <div class="text-sm text-gray-400">Morts</div>
+                </div>
+                <div>
+                    <div class="text-xl font-bold text-yellow-400">{{ "%.1f"|format(stats.avg_assists) }}</div>
+                    <div class="text-sm text-gray-400">Assists</div>
+                </div>
+            </div>
+            <div class="mt-2 text-center">
+                <span class="text-sm text-gray-400">Ratio: {{ "%.2f"|format(stats.kda_ratio) }}</span>
+            </div>
+        </div>
+
+        <!-- Performance -->
+        <div class="bg-dark-secondary rounded-lg p-4 shadow-lg">
+            <h2 class="text-lg font-bold mb-3">Performance</h2>
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <div class="text-xl font-bold">{{ stats.total_games }}</div>
+                    <div class="text-sm text-gray-400">Parties</div>
+                </div>
+                <div>
+                    <div class="text-xl font-bold text-blue-400">{{ "%.1f"|format(stats.winrate) }}%</div>
+                    <div class="text-sm text-gray-400">Winrate</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scores -->
+        <div class="bg-dark-secondary rounded-lg p-4 shadow-lg">
+            <h2 class="text-lg font-bold mb-3">Scores</h2>
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <div class="text-xl font-bold">{{ "%.1f"|format(stats.avg_score) }}</div>
+                    <div class="text-sm text-gray-400">Score Moyen</div>
+                </div>
+                <div>
+                    <div class="text-xl font-bold">{{ stats.best_score }}</div>
+                    <div class="text-sm text-gray-400">Meilleur Score</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Historique des parties en bas, pleine largeur -->
+<div class="bg-dark-secondary rounded-lg p-6 shadow-lg w-full">
+    <h2 class="text-xl font-bold mb-4">Historique des parties</h2>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="border-b border-gray-600">
+                <tr>
+                    <th class="px-3 py-2 text-left">Date</th>
+                    <th class="px-3 py-2 text-left">Champion</th>
+                    <th class="px-3 py-2 text-center">KDA</th>
+                    <th class="px-3 py-2 text-right">Dégâts</th>
+                    <th class="px-3 py-2 text-right">Dégâts subis</th>
+                    <th class="px-3 py-2 text-center">Vision</th>
+                    <th class="px-3 py-2 text-right">Score</th>
+                    <th class="px-3 py-2 text-center">Durée</th>
+                    <th class="px-3 py-2 text-center">Résultat</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for match in stats.match_history %}
+                <tr class="border-b border-gray-700 hover:bg-gray-700">
+                    <td class="px-3 py-2 text-left text-sm">{{ match.date }}</td>
+                    <td class="px-3 py-2 text-left font-medium">{{ match.champion_name }}</td>
+                    <td class="px-3 py-2 text-center">
+                        <span class="text-green-400">{{ match.kills }}</span> /
+                        <span class="text-red-400">{{ match.deaths }}</span> /
+                        <span class="text-yellow-400">{{ match.assists }}</span>
+                    </td>
+                    <td class="px-3 py-2 text-right">{{ match.damage }}</td>
+                    <td class="px-3 py-2 text-right">{{ match.damage_taken }}</td>
+                    <td class="px-3 py-2 text-center">{{ match.vision_score }}</td>
+                    <td class="px-3 py-2 text-right font-medium">{{ match.score }}</td>
+                    <td class="px-3 py-2 text-center">{{ match.duration }}m</td>
+                    <td class="px-3 py-2 text-center">
+                        {% if match.win %}
+                        <span class="text-green-400">Victoire</span>
+                        {% else %}
+                        <span class="text-red-400">Défaite</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

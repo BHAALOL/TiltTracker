@@ -439,3 +439,74 @@ class CommandsCog(commands.Cog, name="TiltTracker"):
         except Exception as e:
             logger.error(f"Erreur lors de l'affichage de la dernière partie pour {game_name}#{tag_line}: {e}")
             await ctx.send("❌ Une erreur s'est produite lors de la récupération de la dernière partie.")
+
+    @commands.hybrid_command(
+        name="graph",
+        description="Affiche un graphique de l'évolution des scores"
+    )
+    @app_commands.describe(
+        game_name="Nom d'invocateur",
+        tag_line="Tag (ex: EUW, NA1, etc.)"
+    )
+    async def graph(self, ctx: commands.Context, game_name: str, tag_line: str):
+        """Affiche l'historique complet des scores d'un joueur"""
+        try:
+            await ctx.defer()
+            
+            # Récupérer l'historique des scores
+            history = await self.bot.database.get_player_score_history(game_name, tag_line)
+            
+            if not history:
+                await ctx.send("❌ Aucun historique trouvé pour ce joueur.")
+                return
+
+            # Créer l'embed avec les informations
+            embed = discord.Embed(
+                title=f"Historique complet des scores de {game_name}#{tag_line}",
+                description=f"Total de {len(history)} parties enregistrées",
+                color=discord.Color.blue()
+            )
+
+            # Calculer les statistiques
+            total_points = sum(game['score'] for game in history)
+            avg_points = total_points / len(history) if history else 0
+            
+            embed.add_field(
+                name="📊 Statistiques globales",
+                value=f"Total des points : **{total_points}**\n"
+                    f"Moyenne par partie : **{avg_points:.1f}**\n"
+                    f"Nombre de parties : **{len(history)}**",
+                inline=False
+            )
+
+            # Diviser l'historique en plusieurs messages si nécessaire
+            games_per_message = 25  # Nombre de parties par message
+            for i in range(0, len(history), games_per_message):
+                chunk = history[i:i + games_per_message]
+                
+                games_text = ""
+                for game in chunk:
+                    result = "✅" if game['win'] else "❌"
+                    date = game['date']  # Format: YYYY-MM-DD HH:MM
+                    games_text += f"{result} {game['champion']} : **{game['score']}** points ({game['kda']})\n"
+                
+                # Si c'est le premier chunk, ajouter au premier embed
+                if i == 0:
+                    embed.add_field(
+                        name="🎮 Historique des parties",
+                        value=games_text,
+                        inline=False
+                    )
+                    await ctx.send(embed=embed)
+                else:
+                    # Créer de nouveaux embeds pour les parties suivantes
+                    new_embed = discord.Embed(
+                        title=f"Suite de l'historique ({i+1}-{min(i+games_per_message, len(history))})",
+                        description=games_text,
+                        color=discord.Color.blue()
+                    )
+                    await ctx.send(embed=new_embed)
+
+        except Exception as e:
+            logger.error(f"Erreur lors de l'affichage de l'historique pour {game_name}#{tag_line}: {e}")
+            await ctx.send("❌ Une erreur s'est produite lors de l'affichage de l'historique.")

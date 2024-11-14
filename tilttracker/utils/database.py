@@ -146,33 +146,96 @@ class Database:
             return False
 
     async def get_player_stats(self, game_name: str, tag_line: str) -> dict:
-        """
-        Récupère les statistiques complètes d'un joueur, incluant les rangs moyens
-        """
+        """Récupère les statistiques et l'historique des parties d'un joueur"""
         try:
+            logger.info(f"Début de la récupération des stats pour {game_name}#{tag_line}")
+            
+            # Vérifier d'abord si le joueur existe
             with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id 
+                    FROM players 
+                    WHERE summoner_name = %s AND tag_line = %s
+                """, (game_name, tag_line))
+                
+                player = cursor.fetchone()
+                if not player:
+                    logger.error(f"Joueur {game_name}#{tag_line} non trouvé dans la base")
+                    return None
+                    
+                player_id = player[0]
+                logger.info(f"ID du joueur trouvé: {player_id}")
+                
+                # Puis récupérer ses stats
                 cursor.execute("""
                     SELECT 
                         COUNT(*) as total_games,
                         SUM(CASE WHEN win THEN 1 ELSE 0 END) as wins,
-                        AVG(kills) as avg_kills,
-                        AVG(deaths) as avg_deaths,
-                        AVG(assists) as avg_assists,
-                        AVG(score) as avg_score,
+                        ROUND(AVG(kills)::numeric, 2) as avg_kills,
+                        ROUND(AVG(deaths)::numeric, 2) as avg_deaths,
+                        ROUND(AVG(assists)::numeric, 2) as avg_assists,
+                        ROUND(AVG(score)::numeric, 2) as avg_score,
                         MAX(score) as best_score,
-                        SUM(score) as total_score,
-                        AVG(rank_in_team) as avg_rank,  -- Nouvelle stat
-                        COUNT(CASE WHEN rank_in_team = 1 THEN 1 END) as first_place_count  -- Nouvelle stat
+                        SUM(score) as total_score
+                    FROM player_matches
+                    WHERE player_id = %s
+                """, (player_id,))
+                
+                stats_row = cursor.fetchone()
+                if not stats_row:
+                    logger.error(f"Aucune statistique trouvée pour le joueur {player_id}")
+                    return None
+
+                stats = dict(zip([
+                    'total_games', 'wins', 'avg_kills', 'avg_deaths', 
+                    'avg_assists', 'avg_score', 'best_score', 'total_score'
+                ], stats_row))
+
+                logger.info("Récupération des parties récentes...")
+                # Récupérer l'historique
+                cursor.execute("""
+                    SELECT 
+                        pm.champion_name,
+                        pm.kills,
+                        pm.deaths,
+                        pm.assists,
+                        pm.total_damage_dealt_to_champions as damage,
+                        pm.total_damage_taken as damage_taken,
+                        pm.vision_score,
+                        pm.score,
+                        pm.win,
+                        m.game_duration,
+                        m.created_at
                     FROM player_matches pm
-                    JOIN players p ON p.id = pm.player_id
-                    WHERE p.summoner_name = %s AND p.tag_line = %s
-                """, (game_name, tag_line))
-                
-                stats = dict(zip([column[0] for column in cursor.description], cursor.fetchone()))
+                    JOIN matches m ON m.id = pm.match_id
+                    WHERE pm.player_id = %s
+                    ORDER BY m.created_at DESC
+                """, (player_id,))
+
+                matches = []
+                for row in cursor.fetchall():
+                    match = {
+                        'champion_name': row[0],
+                        'kills': row[1],
+                        'deaths': row[2],
+                        'assists': row[3],
+                        'damage': row[4],
+                        'damage_taken': row[5],
+                        'vision_score': row[6],
+                        'score': row[7],
+                        'win': row[8],
+                        'duration': row[9] // 60,
+                        'date': row[10].strftime('%Y-%m-%d %H:%M')
+                    }
+                    matches.append(match)
+
+                logger.info(f"Nombre de parties trouvées: {len(matches)}")
+                stats['match_history'] = matches
                 return stats
-                
+
         except Exception as e:
-            logger.error(f"Erreur lors de la récupération des stats pour {game_name}#{tag_line}: {e}")
+            logger.error(f"Erreur lors de la récupération des stats: {e}")
+            logger.exception(e)
             return None
 
     async def get_leaderboard(self, limit: int = 10) -> list:
@@ -287,6 +350,44 @@ class Database:
         except Exception as e:
             logger.error(f"Erreur lors de la récupération du total des points pour le joueur {player_id}: {e}")
             return 0
+
+    async def get_player_score_history(self, game_name: str, tag_line: str) -> list:
+        """Récupère l'historique des scores d'un joueur avec les détails de chaque partie"""
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        pm.score,
+                        pm.champion_name,
+                        pm.win,
+                        m.created_at,
+                        pm.kills,
+                        pm.deaths,
+                        pm.assists
+                    FROM player_matches pm
+                    JOIN players p ON p.id = pm.player_id
+                    JOIN matches m ON m.id = pm.match_id
+                    WHERE p.summoner_name = %s 
+                    AND p.tag_line = %s
+                    ORDER BY m.created_at ASC
+                """, (game_name, tag_line))
+                
+                matches = [
+                    {
+                        'score': row[0],
+                        'champion': row[1],
+                        'win': row[2],
+                        'date': row[3].strftime('%Y-%m-%d %H:%M'),
+                        'kda': f"{row[4]}/{row[5]}/{row[6]}"
+                    }
+                    for row in cursor.fetchall()
+                ]
+                
+                return matches
+                
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération de l'historique pour {game_name}#{tag_line}: {e}")
+            return []
 
     def close(self):
         """Ferme la connexion à la base de données."""

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Comparaison de joueurs{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- En-tête -->
+    <div class="bg-dark-secondary rounded-lg p-6 shadow-lg">
+        <h1 class="text-2xl font-bold text-center mb-4">Comparaison des joueurs</h1>
+        <div class="grid grid-cols-3 gap-4 text-center">
+            <div class="text-xl font-bold text-blue-400">
+                {{ player1.summoner_name }}#{{ player1.tag_line }}
+            </div>
+            <div class="text-lg text-gray-400">VS</div>
+            <div class="text-xl font-bold text-red-400">
+                {{ player2.summoner_name }}#{{ player2.tag_line }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistiques Principales -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- KDA -->
+        <div class="bg-dark-secondary rounded-lg p-6 shadow-lg">
+            <h2 class="text-xl font-bold mb-4">KDA Moyen</h2>
+            <div class="space-y-4">
+                <!-- Kills -->
+                <div class="grid grid-cols-3 gap-4 items-center">
+                    <div class="text-right">
+                        <span class="text-xl font-bold text-blue-400">{{ "%.1f"|format(comparison.kda.player1.kills) }}</span>
+                    </div>
+                    <div class="text-center text-sm text-gray-400">Kills</div>
+                    <div class="text-left">
+                        <span class="text-xl font-bold text-red-400">{{ "%.1f"|format(comparison.kda.player2.kills) }}</span>
+                    </div>
+                </div>
+                <!-- Deaths -->
+                <div class="grid grid-cols-3 gap-4 items-center">
+                    <div class="text-right">
+                        <span class="text-xl font-bold text-blue-400">{{ "%.1f"|format(comparison.kda.player1.deaths) }}</span>
+                    </div>
+                    <div class="text-center text-sm text-gray-400">Deaths</div>
+                    <div class="text-left">
+                        <span class="text-xl font-bold text-red-400">{{ "%.1f"|format(comparison.kda.player2.deaths) }}</span>
+                    </div>
+                </div>
+                <!-- Assists -->
+                <div class="grid grid-cols-3 gap-4 items-center">
+                    <div class="text-right">
+                        <span class="text-xl font-bold text-blue-400">{{ "%.1f"|format(comparison.kda.player1.assists) }}</span>
+                    </div>
+                    <div class="text-center text-sm text-gray-400">Assists</div>
+                    <div class="text-left">
+                        <span class="text-xl font-bold text-red-400">{{ "%.1f"|format(comparison.kda.player2.assists) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance -->
+        <div class="bg-dark-secondary rounded-lg p-6 shadow-lg">
+            <h2 class="text-xl font-bold mb-4">Performance</h2>
+            <div class="space-y-4">
+                <!-- Winrate -->
+                <div class="grid grid-cols-3 gap-4 items-center">
+                    <div class="text-right">
+                        <span class="text-xl font-bold text-blue-400">{{ "%.1f"|format(comparison.performance.player1.winrate) }}%</span>
+                    </div>
+                    <div class="text-center text-sm text-gray-400">Winrate</div>
+                    <div class="text-left">
+                        <span class="text-xl font-bold text-red-400">{{ "%.1f"|format(comparison.performance.player2.winrate) }}%</span>
+                    </div>
+                </div>
+                <!-- Score Moyen -->
+                <div class="grid grid-cols-3 gap-4 items-center">
+                    <div class="text-right">
+                        <span class="text-xl font-bold text-blue-400">{{ "%.1f"|format(comparison.performance.player1.avg_score) }}</span>
+                    </div>
+                    <div class="text-center text-sm text-gray-400">Score Moyen</div>
+                    <div class="text-left">
+                        <span class="text-xl font-bold text-red-400">{{ "%.1f"|format(comparison.performance.player2.avg_score) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistiques Détaillées -->
+    <div class="bg-dark-secondary rounded-lg p-6 shadow-lg">
+        <h2 class="text-xl font-bold mb-4">Statistiques Détaillées</h2>
+        <div class="grid grid-cols-3 gap-4">
+            <!-- Joueur 1 -->
+            <div class="space-y-2">
+                <div class="text-gray-400">Parties jouées</div>
+                <div class="text-xl font-bold">{{ player1.total_games }}</div>
+                <div class="text-gray-400">Score total</div>
+                <div class="text-xl font-bold">{{ player1.total_score }}</div>
+                <div class="text-gray-400">Meilleur score</div>
+                <div class="text-xl font-bold">{{ player1.best_score }}</div>
+            </div>
+            
+            <!-- Différences -->
+            <div class="space-y-2 text-center">
+                <div class="text-gray-400">Différence</div>
+                <div class="text-xl font-bold {% if player1.total_games > player2.total_games %}text-blue-400{% else %}text-red-400{% endif %}">
+                    {{ player1.total_games - player2.total_games }}
+                </div>
+                <div class="text-gray-400">Différence</div>
+                <div class="text-xl font-bold {% if comparison.performance.difference.avg_score > 0 %}text-blue-400{% else %}text-red-400{% endif %}">
+                    {{ "%.1f"|format(comparison.performance.difference.avg_score) }}
+                </div>
+                <div class="text-gray-400">Différence</div>
+                <div class="text-xl font-bold {% if comparison.performance.difference.winrate > 0 %}text-blue-400{% else %}text-red-400{% endif %}">
+                    {{ "%.1f"|format(comparison.performance.difference.winrate) }}%
+                </div>
+            </div>
+            
+            <!-- Joueur 2 -->
+            <div class="space-y-2 text-right">
+                <div class="text-gray-400">Parties jouées</div>
+                <div class="text-xl font-bold">{{ player2.total_games }}</div>
+                <div class="text-gray-400">Score total</div>
+                <div class="text-xl font-bold">{{ player2.total_score }}</div>
+                <div class="text-gray-400">Meilleur score</div>
+                <div class="text-xl font-bold">{{ player2.best_score }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Boutons de navigation -->
+    <div class="flex justify-center space-x-4">
+        <a href="/leaderboard" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white">
+            Retour au classement
+        </a>
+        <a href="/player/{{ player1.summoner_name }}/{{ player1.tag_line }}" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white">
+            Profil {{ player1.summoner_name }}
+        </a>
+        <a href="/player/{{ player2.summoner_name }}/{{ player2.tag_line }}" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white">
+            Profil {{ player2.summoner_name }}
+        </a>
+    </div>
+</div>
+{% endblock %}

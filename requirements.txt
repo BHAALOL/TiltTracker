@@ -9,3 +9,7 @@ logging-colorizer
 pydantic
 aiohttp
 asyncpg
+fastapi 
+uvicorn 
+jinja2 
+python-multipart
