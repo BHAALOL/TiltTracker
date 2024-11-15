@@ -86,6 +86,13 @@
                                         
                                         <!-- Icônes de statut -->
                                         <div class="flex space-x-1">
+                                            <button 
+                                            onclick="pokeUser('{{ user.client_id }}', '{{ user.name }}')" 
+                                            class="text-blue-400 hover:text-blue-300 transition-colors"
+                                            title="Envoyer un poke">
+                                            👋
+                                        </button>
+
                                             {% if user.is_away %}
                                                 <span class="text-yellow-500" title="AFK">⌛</span>
                                             {% endif %}
@@ -116,5 +123,76 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Modal de confirmation -->
+<div id="pokeModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+        <h3 class="text-lg font-bold mb-4">Envoyer un poke</h3>
+        <p class="mb-4">Voulez-vous envoyer un poke à <span id="pokeUserName" class="font-bold"></span> ?</p>
+        <div class="flex justify-end space-x-3">
+            <button onclick="closePokeModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">
+                Annuler
+            </button>
+            <button id="confirmPokeButton" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded">
+                Envoyer
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Notifications -->
+<div id="notifications" class="fixed bottom-4 right-4 space-y-2"></div>
+
+<!-- JavaScript -->
+<script>
+    let currentClientId = null;
+
+    function showPokeModal(clientId, userName) {
+        currentClientId = clientId;
+        document.getElementById('pokeUserName').textContent = userName;
+        document.getElementById('pokeModal').classList.remove('hidden');
+    }
+
+    function closePokeModal() {
+        document.getElementById('pokeModal').classList.add('hidden');
+        currentClientId = null;
+    }
+
+    function showNotification(message, isSuccess = true) {
+        const notification = document.createElement('div');
+        notification.className = `${isSuccess ? 'bg-green-500' : 'bg-red-500'} text-white px-4 py-2 rounded shadow-lg fade-in`;
+        notification.textContent = message;
+        
+        document.getElementById('notifications').appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+
+    async function pokeUser(clientId, userName) {
+        showPokeModal(clientId, userName);
+        
+        document.getElementById('confirmPokeButton').onclick = async () => {
+            try {
+                closePokeModal();
+                
+                const response = await fetch(`/poke/${clientId}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showNotification(`Poke envoyé à ${userName} !`);
+                } else {
+                    showNotification(data.message || 'Échec de l\'envoi du poke', false);
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                showNotification('Une erreur est survenue', false);
+            }
+        };
+    }
+</script>
 
 {% endblock %}

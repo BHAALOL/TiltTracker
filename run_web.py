@@ -220,6 +220,17 @@ async def compare_players(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/poke/{client_id}")
+async def poke_user(request: Request, client_id: str):
+    try:
+        success = ts_manager.poke_user(client_id)
+        if success:
+            return {"status": "success"}
+        return {"status": "error", "message": "Échec de l'envoi du poke"}
+    except Exception as e:
+        logger.error(f"Erreur lors du poke: {e}")
+        return {"status": "error", "message": str(e)}
+
 if __name__ == "__main__":
     try:
         uvicorn.run(

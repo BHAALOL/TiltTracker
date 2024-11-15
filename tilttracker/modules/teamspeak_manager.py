@@ -25,6 +25,7 @@ class TeamSpeakManager:
                 client_login_password=self.ts_password
             )
             self.server.use(sid=self.ts_virtualserver_id)
+            self.server.clientupdate(client_nickname="TiltTracker Bot")
             logger.info("Connexion au serveur TeamSpeak établie")
             return True
         except Exception as e:
@@ -88,6 +89,7 @@ class TeamSpeakManager:
                     if channel_id in channels_with_users:
                         user_info = {
                             'name': client.get('client_nickname', 'Inconnu'),
+                            'client_id': client['clid'],
                             'is_away': bool(int(client.get('client_away', 0))),
                             'is_muted': bool(int(client.get('client_input_muted', 0))),
                             'platform': client.get('client_platform', 'unknown')
@@ -139,6 +141,18 @@ class TeamSpeakManager:
                 'channels': None,
                 'error': str(e)
             }
+
+    def poke_user(self, client_id: str, message: str = "Enculé !"):
+        """Envoie un poke à un utilisateur"""
+        try:
+            if not self.server:
+                if not self.connect():
+                    return False
+            self.server.clientpoke(clid=client_id, msg=message)
+            return True
+        except Exception as e:
+            logger.error(f"Erreur lors de l'envoi du poke: {e}")
+            return False
 
     def __del__(self):
         """Ferme la connexion quand l'objet est détruit"""
